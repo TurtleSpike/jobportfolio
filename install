@@ -1,5 +1,0 @@
-*.service tmp
-*.timer tmp
-*.yml tmp
-*.sh tmp
-vpn-setup-scripts tmp

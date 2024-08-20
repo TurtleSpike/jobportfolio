@@ -1,0 +1,53 @@
+#!/bin/bash
+
+sudo apt-get update
+sudo apt-get install prometheus
+sudo apt-get install prometheus-alertmanager
+
+sudo bash -c "cat /tmp/alertmanager-tg.yml >> /etc/prometheus/alertmanager.yml"
+
+######### Защита Прометея
+
+sudo openssl genrsa -out /etc/prometheus/prometheus.key 2048
+sudo openssl req -new -key /etc/prometheus/prometheus.key -out /etc/prometheus/prometheus.csr
+sudo openssl x509 -req -days 365 -in /etc/prometheus/prometheus.csr -signkey /etc/prometheus/prometheus.key -out /etc/prometheus/prometheus.crt
+
+sudo chown prometheus:prometheus /etc/prometheus/prometheus.crt
+sudo chown prometheus:prometheus /etc/prometheus/prometheus.key
+sudo chmod 400 /etc/prometheus/prometheus.key /etc/prometheus/prometheus.crt
+
+sudo bash -c "cat << EOF > /etc/prometheus/web.yml
+tls_server_config:
+  cert_file: prometheus.crt
+  key_file: prometheus.key
+basic_auth_users:
+  $USER: `htpasswd -nBC 12 "" | tr -d ':\n'`
+EOF"
+
+sudo bash -c "cat << EOF > /etc/systemd/system/prometheus.service
+[Unit]
+Description=Prometheus
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=prometheus
+Group=prometheus
+Type=simple
+ExecStart=/usr/bin/prometheus \
+ --config.file /etc/prometheus/prometheus.yml \
+ --storage.tsdb.path /var/lib/prometheus/ \
+ --web.console.templates=/etc/prometheus/consoles \
+ --web.console.libraries=/etc/prometheus/console_libraries \
+ --web.config.file=/etc/prometheus/web.yml
+
+[Install]
+WantedBy=multi-user.target
+EOF"
+
+sudo systemctl daemon-reload
+sudo systemctl restart prometheus
+
+###############################
+
+######### Нод ВПНа по воздуху

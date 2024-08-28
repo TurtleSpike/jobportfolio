@@ -1,9 +1,0 @@
-[Unit]
-Description=Service for creating VPN server backups
-
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/auto-backup.sh
-
-[Install]
-WantedBy=multi-user.target

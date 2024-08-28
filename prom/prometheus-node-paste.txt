@@ -1,0 +1,33 @@
+#### Settings for OpenVPN monitoring
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/prom-node-exporter.crt
+      insecure_skip_verify: true
+    basic_auth:
+      username: PROMUSERNAMEPLACEHOLDER
+      password: PROMPASSPLACEHOLDER
+    static_configs:
+      - targets: ['localhost:9100'] 
+	  
+  - job_name: vpn-node
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/vpn-node-exporter.crt
+      insecure_skip_verify: true
+    basic_auth:
+      username: VPNUSERNAMEPLACEHOLDER
+      password: VPNPASSPLACEHOLDER
+    static_configs:
+      - targets: ['VPNIPPLACEHOLDER:9100']
+
+  - job_name: pki-node
+    scheme: https
+    tls_config:
+      ca_file: /etc/prometheus/pki-node-exporter.crt
+      insecure_skip_verify: true   
+    basic_auth:
+      username: PKIUSERNAMEPLACHOLDER
+      password: PKIPASSPLACEHOLDER
+    static_configs:
+      - targets: ['PKIIPPLACEHOLDER:9100']
+#### Settings for OpenVPN monitoring

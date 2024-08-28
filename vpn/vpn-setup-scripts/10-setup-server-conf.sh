@@ -11,6 +11,8 @@ else
 fi
 
 servername=$1
+ipis=$2
+echo $ipis > /tmp/promip.is
 sudo cp /usr/share/doc/openvpn/examples/sample-config-files/server.conf /etc/openvpn/server/$servername.conf
 
 sercon=/etc/openvpn/server/$servername.conf
@@ -53,6 +55,7 @@ sudo sysctl -p
 echo -e '\033[92m = = = = Value of "net.ipv4.ip_forward" parameter has been set to "1" = = = = \033[m'
 
 int=`ip a | awk -F': ' '/^2: /{print $2}'`
+curl ifconfig.me
 
 # OpenVPN
 sudo iptables -A INPUT -i $int -m state --state NEW -p udp --dport 1194 -j ACCEPT
@@ -68,13 +71,11 @@ sudo iptables -t nat -A POSTROUTING -s 10.8.0.0/24 -o "$int" -j MASQUERADE
 sudo iptables -A INPUT -i lo -j ACCEPT
 sudo iptables -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 21 -j ACCEPT
 sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
 sudo iptables -A INPUT -p udp --dport 1194 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 9090 -j ACCEPT
-sudo iptables -A INPUT -p tcp --dport 9100 -j ACCEPT
+sudo iptables -A INPUT -p tcp -s $ipis --dport 9100 -j ACCEPT
 
 sudo iptables -P INPUT DROP
 sudo iptables -P FORWARD DROP
@@ -82,7 +83,7 @@ sudo iptables -P OUTPUT ACCEPT
 
 sudo service netfilter-persistent save
 
-echo -e '\033[92m = = = = Configuration of network and firewall rules for the "'$servername'" server have been adjusted = = = = \033[m'
+echo -e '\033[92m = = = = Configuration of network and firewall rules for the "'$servername'" server have been adjusted and updated = = = = \033[m'
 
 sudo systemctl -f enable openvpn-server@$servername.service
 echo -e '\033[92m = = = = "'$servername'" server has been enabled with including it in startup = = = = \033[m'

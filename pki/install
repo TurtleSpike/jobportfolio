@@ -1,4 +1,0 @@
-*.service tmp
-*.timer tmp
-*.sh tmp
-pki-setup-scripts tmp

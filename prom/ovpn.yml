@@ -1,0 +1,111 @@
+groups:
+- name: OpenVPN server
+  rules:
+  - alert: VPN_auto_backup_timer_Down
+    expr: node_systemd_unit_state{instance="VPNIPPLACEHOLDER:9100",job="node-vpn",name="auto-backup.timer",state="inactive",type="oneshot"} == 1
+    for: 1m
+    annotations:
+      title: 'VPN "auto_backup" timer is down'
+      description: 'VPN "auto_backup" timer has been down for more than 1 minute'
+    labels:
+      severity: 'critical'
+  - alert: OpenVPN_Down
+    expr: node_systemd_unit_state{instance="VPNIPPLACEHOLDER:9100",job="node-vpn",name="openvpn-server@SERVERPLACEHOLDER.service",state="inactive",type="notify"} == 1
+    for: 1m
+    annotations:
+      title: 'OpenVPN server is down'
+      description: 'OpenVPN server has been down for more than 1 minute'
+    labels:
+      severity: 'critical'
+  - alert: VPN_CPU_Overload
+    expr: node_load5{instance="VPNIPPLACEHOLDER:9100",job="node-vpn"} > VPNCPUPLACEHOLDER
+    for: 1m
+    annotations:
+      title: 'VPN server CPU is overloaded'
+      description: 'VPN server CPU load for 5 minutes is over 100% for more than 1 minute'
+    labels:
+      severity: 'medium'
+  - alert: VPNLowMemory
+    expr: 100 * (1 - (node_memory_MemFree_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn"} + node_memory_Cached_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn"} + node_memory_Buffers_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn"}) / node_memory_MemTotal_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn"}) > 85
+    for: 5m
+    annotations:
+      title: 'Low RAM on VPN server is available'
+      description: 'Average available amoount of RAM on VPN server is less than 15% for more than 5 minutes'
+    labels:
+      severity: 'critical'
+  - alert: VPNLowDiskSpace
+    expr: 100 - node_filesystem_avail_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn",fstype!="rootfs",mountpoint="/"} / node_filesystem_size_bytes{instance="VPNIPPLACEHOLDER:9100",job="node-vpn",mountpoint="/"} * 100 > 90
+    for: 1
+    annotations:
+      title: 'Low disk space on VPN server'
+      description: 'Less than 10% of the VPN server disk space is available for more than 1 minute'
+    labels:
+      severity: 'critical'
+- name: PKI server 
+  rules:
+  - alert: PKI_auto_backup_timer_Down
+    expr: node_systemd_unit_state{instance="PKIIPPLACEHOLDER:9100",job="node-pki",name="auto-backup.timer",state="inactive",type="oneshot"} == 1
+    for: 1m
+    annotations:
+      title: 'PKI "auto_backup" timer is down'
+      description: 'PKI "auto_backup" timer has been down for more than 1 minute'
+    labels:
+      severity: 'critical'
+  - alert: PKI_CPU_Overload
+    expr: node_load5{instance="PKIIPPLACEHOLDER:9100",job="node-pki"} > PKICPUPLACEHOLDER
+    for: 1m
+    annotations:
+      title: 'PKI server CPU is overloaded'
+      description: 'PKI server CPU load for 5 minutes is over 100% for more than 1 minute'
+    labels:
+      severity: 'medium'
+  - alert: PKILowMemory
+    expr: 100 * (1 - (node_memory_MemFree_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki"} + node_memory_Cached_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki"} + node_memory_Buffers_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki"}) / node_memory_MemTotal_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki"}) > 85
+    for: 5m
+    annotations:
+      title: 'Low RAM on VPN server is available'
+      description: 'Average available amoount of RAM on VPN server is less than 15% for more than 5 minutes'
+    labels:
+      severity: 'critical'
+  - alert: PKILowDiskSpace
+    expr: 100 - node_filesystem_avail_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki",fstype!="rootfs", mountpoint="/"} / node_filesystem_size_bytes{instance="PKIIPPLACEHOLDER:9100",job="node-pki",mountpoint="/"} * 100 > 90
+    for: 1m
+    annotations:
+      title: 'Low disk space on VPN server'
+      description: 'Less than 10% of the disk space on VPN server is available for more than 1 minute'
+    labels:
+      severity: 'critical'
+- name: Prometheus server 
+  rules:
+  - alert: PROM_auto_backup_timer_Down
+    expr: node_systemd_unit_state{instance="localhost:9100",job="node-prom",name="auto-backup.timer",state="inactive",type="oneshot"} == 1
+    for: 1m
+    annotations:
+      title: 'Prometheus "auto_backup" timer is down'
+      description: 'Prometheus "auto_backup" timer has been down for more than 1 minute'
+    labels:
+      severity: 'critical'
+  - alert: PROM_CPU_Overload
+    expr: node_load5{instance="localhost:9100",job="node-prom"} > PROMCPUPLACEHOLDER
+    for: 1m
+    annotations:
+      title: 'Prometheus server CPU is overloaded'
+      description: 'Prometheus server CPU load for 5 minutes is over 100% for more than 1 minute'
+    labels:
+      severity: 'medium'
+  - alert: PROMLowMemory
+    expr: 100 * (1 - (node_memory_MemFree_bytes{instance="localhost:9100",job="node-prom"} + node_memory_Cached_bytes{instance="localhost:9100",job="node-prom"} + node_memory_Buffers_bytes{instance="localhost:9100",job="node-prom"}) / node_memory_MemTotal_bytes{instance="localhost:9100",job="node-prom"}) > 85
+    for: 5m
+    annotations:
+      title: 'Low RAM on Prometheus server is available'
+      description: 'Average available amoount of RAM on Prometheus server is less than 15% for more than 5 minutes'
+    labels:
+      severity: 'critical'
+  - alert: PROMLowDiskSpace
+    expr: 100 - node_filesystem_avail_bytes{instance="localhost:9100",job="node-prom",fstype!="rootfs", mountpoint="/"} / node_filesystem_size_bytes{instance="localhost:9100",job="node-prom",mountpoint="/"} * 100 > 90
+    for: 1m
+    annotations:
+      title: 'Low disk space on Prometheus server'
+      description: 'Less than 10% of the disk space on Prometheus server is available for more than 1 minute'
+    labels:
+      severity: 'critical'

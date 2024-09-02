@@ -1,5 +1,0 @@
-*.service tmp
-*.timer tmp
-*.sh tmp
-*.yml tmp
-prometheus-node-paste.txt tmp

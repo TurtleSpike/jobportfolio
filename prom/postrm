@@ -1,3 +1,0 @@
-#!/bin/bash
-
-echo -e '\033[1;91m = = = = Monitoring package for OpenVPN setup has been uninstalled successfully = = = = \033[m'

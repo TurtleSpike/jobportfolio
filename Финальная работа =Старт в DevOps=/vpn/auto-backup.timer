@@ -1,0 +1,9 @@
+[Unit]
+Description=Executing of auto-backup.service every day
+
+[Timer]
+OnCalendar=*-*-* 23:59
+Unit=auto-backup.service
+
+[Install]
+WantedBy=multi-user.target

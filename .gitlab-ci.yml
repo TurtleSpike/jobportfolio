@@ -1,0 +1,18 @@
+stages:
+    - testing
+    - build
+    - launch-testing
+
+testing:
+    stage: testing
+    script:
+        - ./testing.sh
+
+build:
+    stage: build
+    script:
+        - ./build.sh
+
+launch-test:
+    stage: launch-testing
+    script: ./launch-testing.sh

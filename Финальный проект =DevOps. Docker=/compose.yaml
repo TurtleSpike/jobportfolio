@@ -1,0 +1,57 @@
+services:
+  ldap:
+    image: osixia/openldap
+    environment:
+      LDAP_DOMAIN: gygrefuggel.no
+      LDAP_ADMIN_PASSWORD: kvitravn
+    volumes:
+      - ./ldap/data/slapd/database:/var/lib/ldap
+      - ./ldap/data/slapd/config:/etc/ldap/slapd.d
+
+  ldap_admin:
+    image: osixia/phpldapadmin
+    ports:
+      - "6443:443"
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: ldap
+  
+  gitlab:
+    image: gitlab/gitlab-ce
+    ports:
+      - "8080:80"
+    volumes:
+      - ./gitlab/gitlab_home/config:/etc/gitlab
+      - ./gitlab/gitlab_home/logs:/var/log/gitlab
+      - ./gitlab/gitlab_home/data:/var/opt/gitlab
+
+  rocketchat:
+    image: registry.rocket.chat/rocketchat/rocket.chat
+    ports:
+      - "3000:3000"
+    environment:
+      MONGO_URL: mongodb://mongodb:27017/rocketchat?replicaSet=rs0
+      MONGO_OPLOG_URL: mongodb://mongodb:27017/local?replicaSet=rs0
+      ROOT_UR: http://localhost:3000
+      PORT: 3000
+      DEPLOY_METHOD: docker
+    depends_on:
+      - mongodb
+
+  mongodb:
+    image: docker.io/bitnami/mongodb:4.4
+    volumes:
+      - type: volume
+        source: mongodb_data
+        target: /bitnami/mongodb
+    environment:
+      MONGODB_REPLICA_SET_MODE: primary
+      MONGODB_REPLICA_SET_NAME: rs0
+      MONGODB_PORT_NUMBER: 27017
+      MONGODB_INITIAL_PRIMARY_HOST: mongodb
+      MONGODB_INITIAL_PRIMARY_PORT_NUMBER: 27017
+      MONGODB_ADVERTISED_HOSTNAME: mongodb
+      MONGODB_ENABLE_JOURNAL: "true"
+      ALLOW_EMPTY_PASSWORD: yes
+
+volumes:
+  mongodb_data:

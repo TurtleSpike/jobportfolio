@@ -1,0 +1,598 @@
+#!/bin/bash
+
+########### Установка пакетов
+
+gitstatus=`dpkg --get-selections | grep -w "git" | head -1 | awk '{print $2}'`
+promstatus=`dpkg --get-selections | grep -w "prometheus" | head -1 | awk '{print $2}'`
+alertstatus=`dpkg --get-selections | grep -w "prometheus-alertmanager" | head -1 | awk '{print $2}'`
+apachestatus=`dpkg --get-selections | grep -w "apache2-utils" | head -1 | awk '{print $2}'`
+sudo apt-get update
+
+if [ $gitstatus == "install" ]
+then
+	echo -e '\033[37m = = = = Git is already installed. Skipping... = = = = \033[m'
+else
+	sudo apt-get install git -y
+	if [ $? -eq 0 ]
+	then
+		echo -e '\033[32m = = = = Git has been installed successfully = = = = \033[m'
+	fi
+fi
+
+if [ $promstatus == "install" ]
+then
+	echo -e '\033[37m = = = = Prometheus is already installed. Skipping... = = = = \033[m'
+else
+	sudo apt-get install prometheus -y
+	if [ $? -eq 0 ]
+	then
+		echo -e '\033[32m = = = = Prometheus has been installed successfully = = = = \033[m'
+	fi
+fi
+
+if [ $alertstatus == "install" ]
+then
+	echo -e '\033[37m = = = = Prometheus Alertmanager is already installed. Skipping... = = = = \033[m'
+else
+	sudo apt-get install git -y
+	if [ $? -eq 0 ]
+	then
+		echo -e '\033[32m = = = = Prometheus Alertmanager has been installed successfully = = = = \033[m'
+	fi
+fi
+
+if [ $apachestatus == "install" ]
+then
+	echo -e '\033[37m = = = = "apache2-utils" package is already installed. Skipping... = = = = \033[m'
+else
+	sudo apt-get install git -y
+	if [ $? -eq 0 ]
+	then
+		echo -e '\033[32m = = = = "apache2-utils" package has been installed successfully = = = = \033[m'
+	fi
+fi
+
+######### Настройка фаерволла
+
+sudo iptables -A INPUT -i lo -j ACCEPT
+sudo iptables -A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 80 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 443 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 22 -j ACCEPT
+sudo iptables -A INPUT -p tcp --dport 21 -j ACCEPT
+
+sudo iptables -P INPUT DROP
+sudo iptables -P FORWARD DROP
+sudo iptables -P OUTPUT ACCEPT
+
+sudo service netfilter-persistent save
+
+echo -e '\033[92m = = = = Firewall rules have been updated = = = = \033[m'
+
+######### Юниты и файлы
+
+sudo chmod +x /tmp/auto-backup.sh
+
+sudo mv /tmp/auto-backup.service /etc/systemd/system
+sudo mv /tmp/auto-backup.timer /etc/systemd/system
+sudo mv /tmp/auto-backup.sh /usr/local/bin
+
+echo -e '\033[92m = = = = All files have been placed into their directories = = = = \033[m'
+
+sudo systemctl daemon-reload
+sudo systemctl enable auto-backup.service
+sudo systemctl enable auto-backup.timer
+sudo systemctl start auto-backup.timer
+
+echo -e '\033[92m = = = = New systemd-units have been enabled and started = = = = \033[m'
+
+########### Создание SSH ключей
+
+ssh-keygen -t ed25519 -C "prom-server" -f /home/$USER/.ssh/prom-server
+
+echo -e '\033[92m = = = = "prom-server" SSH keys for GitHub/GitLab backup repository have been generated on path \033[4;92m/home/'$USER'/.ssh\033[m\033[92m = = = = \033[m'
+echo -e '\033[37m = = = = Use this public key to sync with your backup remote repository: = = = = \033[m'
+cat /home/$USER/.ssh/prom-server.pub
+
+while true
+do
+	read -p "Press [y] when you are ready: " choice
+	if [ $choice == "y" || $choice == "Y" ]
+	then
+		break
+	else
+	fi
+done
+
+########### Создание бэкапирования
+
+sudo mkdir /backup
+sudo chown $USER:$USER /backup
+
+echo -e "\033[92m = = = = Backup directory has been created. It's path is \033[4;92m/backup\033[m\033[92m = = = = \033[m"
+
+cd /backup
+git init
+
+echo -e '\033[92m = = = = Git directory has been successfully initialised on path \033[4;92m/backup\033[m\033[92m = = = = \033[m'
+
+while true
+do
+	function starterrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			git config --global user.name "$gitname"
+			git config --global user.email "$gitemail"
+			echo -e '\033[92m = = = = Git name and email have been set = = = = \033[m'
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your choice: \033[m' confirm
+			starterrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter your name to be set in Git config: \033[m' gitname
+	read -p $'\033[37m = = = = Enter your email to be set in Git config: \033[m' gitemail
+	read -p $'\033[1;33m = = = = Confirm your choice [y/n]: \033[m' confirm
+	starterrorconfirm
+done
+
+while true
+do
+	function giterrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			eval `ssh-agent -s`
+			ssh-add
+			ssh-add ~/.ssh/prom-server
+			echo -e '\033[92m = = = = Private key "prom-server" has been successfully added to the SSH Agent = = = = \033[m'
+			git add .
+			git commit -m 'Initial commit'
+			git remote add origin $backupsshlink
+			git push -u origin master
+			echo -e '\033[92m = = = = Initial commit has been executed = = = = \033[m'
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			giterrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter your backup repository SSH link: ' backupsshink
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	giterrorconfirm
+done
+
+########### Создание трансфера
+
+mkdir /home/$USER/transfer
+cd /home/$USER/transfer
+git init
+
+while true
+do
+	function giterrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			git add .
+			git commit -m 'Initial commit'
+			git remote add origin $transfersshlink
+			git pull origin master 
+			git push -u origin master
+			echo -e '\033[92m = = = = Initial commit has been executed = = = = \033[m'
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			giterrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter your backup repository SSH link: ' transfersshink
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	giterrorconfirm
+done
+
+########### Забор файлов из трансфера
+
+vpncpu=`cat vpn-cpu-amount.txt`
+pkicpu=`cat pki-cpu-amount.txt`
+vpnusername=`cat vpn-username.txt`
+pkiusername=`cat pki-username.txt`
+vpnip=`cat vpn-ip.txt`
+pkiip=`cat pki-ip.txt`
+
+rm *cpu*
+rm *username*
+rm *ip*
+
+########### OVPN метрики
+
+promcpu=`lscpu | grep "^CPU(s):" | awk '{print $2}'`
+promip=`curl -s ifconfig.me`
+
+sed -i "s/PROMCPUPLACEHOLDER/$promcpu/g" /tmp/ovpn.yml
+sed -i "s/PKICPUPLACEHOLDER/$pkicpu/g" /tmp/ovpn.yml
+sed -i "s/VPNCPUPLACEHOLDER/$vpncpu/g" /tmp/ovpn.yml
+sed -i "s/PROMIPPLACEHOLDER/$promip/g" /tmp/ovpn.yml
+sed -i "s/PKIIPPLACEHOLDER/$pkiip/g" /tmp/ovpn.yml
+sed -i "s/VPNIPPLACEHOLDER/$vpnip/g" /tmp/ovpn.yml
+
+sudo mv /tmp/ovpn.yml /etc/prometheus
+echo -e '\033[92m = = = = All files have been placed into their directories = = = = \033[m'
+
+sudo sed -i '/rule_files:/{
+a\  - "ovpn.yml"
+}' /etc/prometheus.yml
+
+sudo systemctl restart prometheus
+
+echo -e '\033[92m = = = = New Prometheus rules have been applied = = = = \033[m'
+
+########### Настройка Alertmanager
+
+echo -e '\033[37m = = = = Follow this link to the bot in Telegram: \033[4;37mhttps://t.me/MiddlemanBot\033[m\033[37m = = = = \033[m'
+while true
+do
+	read -p $'\033[37m = = = = Press Start button, recieve your token and enter it here: ' token
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: ' confirm 
+	function tokenerror {
+		if [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		elif [ $confirm == "y" || $confirm == "Y" ]
+			sed -i "s/TOKENPLACEHOLDER/$token/" /tmp/alertmanager-tg.yml
+			break
+		else
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: '
+			tokenerror
+		fi
+	}
+done
+
+sudo bash -c "cat /tmp/alertmanager-tg.yml >> /etc/prometheus/alertmanager"
+echo -e '\033[92m = = = = Alertmanager configuration file has been edited successfully = = = = \033[m'
+
+######### Защита Прометея
+
+sudo openssl genrsa -out /etc/prometheus/prometheus.key 2048
+
+if [ $? -ne 0 ]
+  then
+    echo -e '\033[91m = = = = "prometheus" private key has NOT been generated = = = = \033[m'
+  else
+    echo -e '\033[91m = = = = 2048-bit RSA "prometheus" private key has been generated successfully on path \033[4;92m/etc/prometheus\033[m\033[92m = = = = \033[m'
+fi
+
+sudo openssl req -new -key /etc/prometheus/prometheus.key -out /etc/prometheus/prometheus.csr
+
+while true
+do
+	echo -e '\033[37m ~ ~ ~ ~  Use your external IP address as a Common Name (CN) ~ ~ ~ ~ \033[37m'
+	sudo openssl req -new -key /etc/prometheus/prometheus.key -out /etc/prometheus/prometheus.csr
+	status=$&
+	if [ $status -ne 0 ]
+	  then
+		echo -e '\033[91m = = = = "prometheus" certificate reqhas NOT been generated = = = = \033[m'
+	  else
+		echo -e '\033[91m = = = = "prometheus" certificate request has been generated successfully on path \033[4;92m/etc/prometheus\033[m\033[92m = = = = \033[m'
+		break
+	fi
+done
+
+sudo openssl x509 -req -days 365 -in /etc/prometheus/prometheus.csr -signkey /etc/prometheus/prometheus.key -out /etc/prometheus/prometheus.crt
+
+if [ $? -ne 0 ]
+  then
+    echo -e '\033[91m = = = = "prometheus" certificate was NOT signed = = = = \033[m'
+  else
+    echo -e '\033[91m = = = = "prometheus" certificate was signed successfully = = = = \033[m'
+fi
+
+sudo chown prometheus:prometheus /etc/prometheus/prometheus.crt
+sudo chown prometheus:prometheus /etc/prometheus/prometheus.key
+sudo chmod 400 /etc/prometheus/prometheus.key /etc/prometheus/prometheus.crt
+
+cat << EOF > /tmp/web.yml
+tls_server_config:
+  cert_file: prometheus.crt
+  key_file: prometheus.key
+basic_auth_users:
+  USERNAMEPLACEHOLDER: PROMPASSPLACEHOLDER
+EOF
+sudo mv /tmp/web.yml /etc/prometheus
+
+while true
+do
+	function promerrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			nodeuser=$username
+			echo $nodeuser > /tmp/prom-prom-username.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			promerrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter your username: \033[m' username
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	promerrorconfirm
+done
+
+read -p $'\033[37m ~ ~ ~ ~ Now enter your desired password to secure your Prometheus ~ ~ ~ ~ \033[m'
+
+while true
+do
+	htpasswd -nBC 12 "" | tr -d ':\n' > /tmp/prom-prom-pass.txt
+	status=$&
+	if [ $status -ne 0 ]
+	  then
+		echo -e '\033[91m = = = = Key hash has NOT been generated. Please, try again! = = = = \033[m'
+	  else
+		echo -e '\033[91m = = = = Key hash has been generated successfully = = = = \033[m'
+		break
+	fi
+done
+promrompass=`cat /tmp/prom-prom-pass.txt`
+prompromusername=`cat /tmp/prom-prom-username.txt`
+
+sudo sed -i "s|USERNAMEPLACEHOLDER|$prompromusername|" /etc/prometheus/web.yml
+sudo sed -i "s|PROMPASSPLACEHOLDER|$promprompass|" /etc/prometheus/web.yml
+echo -e '\033[91m = = = = "web.yml" TLS config has been created successfully on path \033[4;92m/etc/prometheus\033[m\033[92m = = = = \033[m'
+
+sudo sed -i 's|ExecStart=/usr/bin/prometheus $ARGS|ExecStart=/usr/bin/prometheus --web.config.file="/etc/prometheus/web.yml"|' /usr/lib/systemd/system/prometheus.service
+
+sudo systemctl daemon-reload
+sudo systemctl restart prometheus
+echo -e '\033[91m = = = = Systemd-unit changes have been applied successfully = = = = \033[m'
+
+rm /tmp/prom-prom-*.txt
+
+######### Настройка node-экспортера
+
+sudo mkdir /etc/node-exporter
+sudo chown $USER:$USER /etc/node-exporter
+cd /etc/node-exporter
+
+sudo openssl genrsa -out prom-node-exporter.key 2048
+
+if [ $? -ne 0 ]
+  then
+    echo -e '\033[91m = = = = "prom-node-exporter" private key has NOT been generated = = = = \033[m'
+  else
+    echo -e '\033[91m = = = = 2048-bit RSA "prom-node-exporter" private key has been generated successfully on path \033[4;92m/etc/node-exporter\033[m\033[92m = = = = \033[m'
+fi
+
+while true
+do
+	sudo openssl req -new -key prom-node-exporter.key -out prom-node-exporter.csr
+	status=$&
+	if [ $status -ne 0 ]
+	  then
+		echo -e '\033[91m = = = = "prom-node-exporter" certificate has NOT been generated = = = = \033[m'
+	  else
+		echo -e '\033[91m = = = = "prom-node-exporter" certificate has been generated successfully on path \033[4;92m/etc/node-exporter\033[m\033[92m = = = = \033[m'
+		break
+	fi
+done
+
+sudo openssl x509 -req -days 365 -in prom-node-exporter.csr -signkey prom-node-exporter.key -out prom-node-exporter.crt
+
+if [ $? -ne 0 ]
+  then
+    echo -e '\033[91m = = = = "prom-node-exporter" certificate was NOT signed = = = = \033[m'
+  else
+    echo -e '\033[91m = = = = "prom-node-exporter" certificate was signed successfully = = = = \033[m'
+fi
+
+sudo chmod o+r+w prom-node-exporter.key
+
+while true
+do
+	function promerrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			promusername=$username
+			echo $promusername > /tmp/prom-node-username.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			promerrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter your username: \033[m' username
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	promerrorconfirm
+done
+
+while true
+do
+	htpasswd -nBC 12 "" | tr -d ':\n' > /tmp/prom-node-pass.txt
+	status=$?
+	if [ $status -ne 0 ]
+	  then
+		echo -e '\033[91m = = = = Key hash has NOT been generated. Please, try again! = = = = \033[m'
+	  else
+		echo -e '\033[91m = = = = Key hash has been generated successfully = = = = \033[m'
+		break
+	fi
+done
+promnodepass=`cat /tmp/prom-node-pass.txt`
+promnodeusername=`cat /tmp/prom-node-user.txt`
+rm /tmp/prom-node-*.txt
+
+cat << EOF >> /etc/node-exporter/config.yml
+tls_server_config:
+  cert_file: prom-node-exporter.crt
+  key_file: prom-node-exporter.key
+basic_auth_users:
+    USERNAMEPLACEHOLDER: PROMPASSPLACEHOLDER
+EOF
+
+sudo sed -i "s|USERNAMEPLACEHOLDER|$promnodeusername|" /etc/node-exporter/config.yml
+sudo sed -i "s|PROMPASSPLACEHOLDER|$promnodepass|" /etc/node-exporter/config.yml
+echo -e '\033[91m = = = = "config.yml" TLS config has been created successfully on path \033[4;92m/etc/node-exporter\033[m\033[92m = = = = \033[m'
+
+sudo sed -i 's|ExecStart=/usr/bin/prometheus-node-exporter $ARGS|ExecStart=/usr/bin/prometheus-node-exporter --web.config.file="/etc/node-exporter/config.yml"|' /usr/lib/systemd/system/prometheus-node-exporter.service
+echo -e '\033[91m = = = = "prometheus-node-exporter" service has been adjusted successfully = = = = \033[m'
+
+sudo systemctl daemon-reload
+sudo systemctl restart prometheus-node-exporter
+echo -e '\033[91m = = = = Systemd-unit changes have been applied successfully = = = = \033[m'
+
+######### Добавление экспортеров PKI и VPN серверов в реестр
+
+sudo mv /home/$USER/transfer/vpn-node-exporter.crt /etc/prometheus
+sudo mv /home/$USER/transfer/pki-node-exporter.crt /etc/prometheus
+sudo cp /etc/node-exporter/prom-node-exporter.crt /etc/prometheus
+
+sudo sed -i '/- job_name: '\''prometheus'\''/,/- job_name: node/{/- job_name: '\''prometheus'\''/!{/- job_name: node/!d}}' /etc/prometheus/prometheus.yml
+sudo sed -i '/- job_name: node/,/- job_name: /{/- job_name: node/!{/- job_name: /!d}}' /etc/prometheus/prometheus.yml
+
+sudo sed -i '/- job_name: '\''prometheus'\''/,+1d' /etc/prometheus/prometheus.yml
+
+sudo sed -i "s|USERNAMEPLACEHOLDER|$prompromusername|" /tmp/prometheus-node-paste.txt
+sudo sed -i "s|PASSPLACEHOLDER|$promprompass|" /tmp/prometheus-node-paste.txt
+
+sed -i "s/PKIIPPLACEHOLDER/$pkiip/g" /tmp/prometheus-node-paste.txt
+sed -i "s/VPNIPPLACEHOLDER/$vpnip/g" /tmp/prometheus-node-paste.txt
+sed -i "s/PROMIPPLACEHOLDER/$promip/g" /tmp/prometheus-node-paste.txt
+
+sed -i "s/PROMUSERNAMEPLACEHOLDER/$promnodeusername/g" /tmp/prometheus-node-paste.txt
+sed -i "s/PKIUSERNAMEPLACEHOLDER/$pkiusername/g" /tmp/prometheus-node-paste.txt
+sed -i "s/VPNUSERNAMEPLACEHOLDER/$vpnusername/g" /tmp/prometheus-node-paste.txt
+
+while true
+do
+	function pkierrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			pkipassword=$password
+			echo $pkipassword > /tmp/pkipassword.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			pkierrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter password you used to secure PKI Node Exporter: \033[m' password
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	pkierrorconfirm
+done
+
+while true
+do
+	function vpnerrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			vpnpassword=$password
+			echo $vpnpassword > /tmp/vpnpassword.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			vpnerrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter password you used to secure VPN Node Exporter: \033[m' password
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	vpnerrorconfirm
+done
+
+while true
+do
+	function promerrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			prompassword=$password
+			echo $prompassword > /tmp/promnodepassword.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			promerrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter password you used to secure Prometheus Node Exporter: \033[m' password
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	promerrorconfirm
+done
+
+while true
+do
+	function promerrorconfirm {
+		if [ $confirm == "y" || $confirm == "Y" ]
+		then
+			prompassword=$password
+			echo $prompassword > /tmp/prompassword.txt
+			break
+		elif [ $confirm == "n" || $confirm == "N" ]
+		then
+			continue
+		else
+		then
+			read -p $'\033[1;33m = = = = Please, enter [y] or [n] to confirm your input: \033[m' confirm
+			promerrorconfirm
+		fi
+	}
+	
+	read -p $'\033[37m = = = = Enter password you used to secure Prometheus: \033[m' password
+	read -p $'\033[1;33m = = = = Confirm your input [y/n]: \033[m' confirm
+	promerrorconfirm
+done
+
+promnodepassword=`cat /tmp/promnodepassword.txt`
+pkipassword=`cat /tmp/pkipassword.txt`
+vpnpassword=`cat /tmp/vpnpassword.txt`
+prompassword=`cat /tmp/prompassword.txt`
+
+sed -i "s/PROMPASSPLACEHOLDER/$promnodepassword/g" /tmp/prometheus-node-paste.txt
+sed -i "s/PKIPASSPLACEHOLDER/$pkipassword/g" /tmp/prometheus-node-paste.txt
+sed -i "s/VPNPASSPLACEHOLDER/$vpnpassword/g" /tmp/prometheus-node-paste.txt
+sed -i "s/PASSPLACEHOLDER/$prompassword/g" /tmp/prometheus-node-paste.txt
+
+cd /tmp
+sudo sed -i '/- job_name: '\''prometheus'\''/r prometheus-node-paste.txt' /etc/prometheus/prometheus.yml
+
+rm /tmp/*password.txt
+
+sudo systemctl restart prometheus
+echo -e '\033[1;91m = = = = Node Exporter certificates have been set up successfully = = = = \033[m'
+
+###############################
+
+echo -e '\033[1;91m = = = = Monitoring package for OpenVPN setup has been installed successfully = = = = \033[m'
